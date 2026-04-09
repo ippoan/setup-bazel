@@ -1,0 +1,29 @@
+name: Build bazel-r2-sync
+
+on:
+  push:
+    tags: ['r2-sync-v*']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: Install musl-tools
+        run: sudo apt-get install -y musl-tools
+
+      - name: Build
+        working-directory: rust/bazel-r2-sync
+        run: cargo build --release --target x86_64-unknown-linux-musl
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: rust/bazel-r2-sync/target/x86_64-unknown-linux-musl/release/bazel-r2-sync

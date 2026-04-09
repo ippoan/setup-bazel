@@ -1,0 +1,22 @@
+[package]
+name = "bazel-r2-sync"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "bazel-r2-sync"
+path = "src/main.rs"
+
+[dependencies]
+rust-s3 = { version = "0.35", default-features = false, features = ["tokio-rustls-tls"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs"] }
+clap = { version = "4", features = ["derive", "env"] }
+anyhow = "1"
+walkdir = "2"
+serde_json = "1"
+
+[profile.release]
+lto = true
+strip = true
+opt-level = "s"
+codegen-units = 1
