@@ -1,0 +1,72 @@
+name: Benchmark cache restore
+
+on:
+  workflow_dispatch:
+
+jobs:
+  # Step 1: Create test data and save caches (both methods)
+  save:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create test cache (5448 files, ~920MB)
+        run: |
+          mkdir -p disk-cache/ac disk-cache/cas
+          # Generate 5448 files of varying sizes (total ~920MB)
+          for i in $(seq 1 5448); do
+            dir="disk-cache/cas/$(printf '%02x' $((i % 256)))"
+            mkdir -p "$dir"
+            # Random size: 10KB-500KB per file
+            size=$((RANDOM % 500000 + 10000))
+            dd if=/dev/urandom of="$dir/file_$i" bs=1 count=$size 2>/dev/null
+          done
+          echo "Files: $(find disk-cache -type f | wc -l)"
+          echo "Size: $(du -sh disk-cache/)"
+
+      # Method A: actions/cache with directory (5448 files)
+      - name: "[A] Save directory cache"
+        uses: actions/cache/save@v4
+        with:
+          path: disk-cache
+          key: bench-dir-${{ github.run_id }}
+
+      # Method B: self-tar then actions/cache with 1 file
+      - name: "[B] tar.zst + save single file"
+        run: |
+          time tar --zstd -cf disk-cache.tar.zst disk-cache/
+          ls -lh disk-cache.tar.zst
+      - uses: actions/cache/save@v4
+        with:
+          path: disk-cache.tar.zst
+          key: bench-tar-${{ github.run_id }}
+
+  # Step 2: Restore and benchmark both methods
+  restore-dir:
+    needs: save
+    runs-on: ubuntu-latest
+    steps:
+      - name: "[A] Restore directory cache (actions/cache handles 5448 files)"
+        id: restore
+        uses: actions/cache/restore@v4
+        with:
+          path: disk-cache
+          key: bench-dir-${{ github.run_id }}
+      - name: Verify
+        run: |
+          echo "Files: $(find disk-cache -type f | wc -l)"
+          echo "Size: $(du -sh disk-cache/)"
+
+  restore-tar:
+    needs: save
+    runs-on: ubuntu-latest
+    steps:
+      - name: "[B] Restore tar.zst (actions/cache handles 1 file)"
+        uses: actions/cache/restore@v4
+        with:
+          path: disk-cache.tar.zst
+          key: bench-tar-${{ github.run_id }}
+      - name: "[B] Extract tar.zst"
+        run: |
+          ls -lh disk-cache.tar.zst
+          time tar --zstd -xf disk-cache.tar.zst
+          echo "Files: $(find disk-cache -type f | wc -l)"
+          echo "Size: $(du -sh disk-cache/)"
