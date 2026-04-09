@@ -9,7 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 rust-s3 = { version = "0.35", default-features = false, features = ["tokio-rustls-tls"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "signal", "time"] }
 clap = { version = "4", features = ["derive", "env"] }
 anyhow = "1"
 walkdir = "2"
