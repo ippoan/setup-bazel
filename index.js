@@ -1,4 +1,5 @@
 import fs from 'fs'
+import { execSync } from 'child_process'
 import { setTimeout } from 'timers/promises'
 import * as core from '@actions/core'
 import * as cache from '@actions/cache'
@@ -6,7 +7,6 @@ import * as github from '@actions/github'
 import * as glob from '@actions/glob'
 import * as tc from '@actions/tool-cache'
 import config from './config.js'
-import { restoreDiskCacheFromR2 } from './r2.js'
 
 async function run() {
   try {
@@ -26,16 +26,57 @@ async function setupBazel() {
 
   await setupBazelisk()
   await restoreCache(config.bazeliskCache)
-
-  // disk cache: R2 が設定されていれば R2 から sync (tar なし)、なければ @actions/cache
-  if (config.r2.enabled && config.diskCache.enabled) {
-    await restoreDiskCacheFromR2(config.diskCache.paths[0])
-  } else {
-    await restoreCache(config.diskCache)
-  }
-
+  await restoreDiskCache()
   await restoreCache(config.repositoryCache)
   await restoreExternalCaches(config.externalCache)
+}
+
+/**
+ * disk-cache を tar.zst 1ファイルとして restore。
+ * actions/cache が 1 ファイルだけ扱うので高速。
+ * 展開は自前で tar --zstd -xf (5448 files でも <1s)。
+ */
+async function restoreDiskCache() {
+  const diskCache = config.diskCache
+  if (!diskCache.enabled) return
+
+  core.startGroup('Restore disk cache (tar.zst)')
+  try {
+    const tarPath = config.diskCacheTarPath
+    const hash = await glob.hashFiles(diskCache.files.join('\n'))
+    const restoreKey = `${config.baseCacheKey}-disk-tar-`
+    const key = `${restoreKey}${hash}`
+
+    let t0 = Date.now()
+    const restoredKey = await cache.restoreCache(
+      [tarPath], key, [restoreKey],
+      { segmentTimeoutInMs: 300000 }
+    )
+    const downloadMs = Date.now() - t0
+
+    if (restoredKey) {
+      core.info(`Cache downloaded in ${(downloadMs / 1000).toFixed(1)}s (from ${restoredKey})`)
+      if (fs.existsSync(tarPath)) {
+        const stat = fs.statSync(tarPath)
+        core.info(`tar.zst size: ${(stat.size / 1024 / 1024).toFixed(1)} MB`)
+        const diskDir = diskCache.paths[0]
+        fs.mkdirSync(diskDir, { recursive: true })
+        t0 = Date.now()
+        execSync(`tar --zstd -xf ${tarPath} -C /`, { stdio: 'inherit' })
+        const extractMs = Date.now() - t0
+        core.info(`Extracted in ${(extractMs / 1000).toFixed(1)}s`)
+      }
+      if (restoredKey === key) {
+        core.saveState('disk-tar-cache-hit', 'true')
+      }
+    } else {
+      core.info('No disk cache found')
+    }
+  } catch (err) {
+    core.warning(`Failed to restore disk cache: ${err}`)
+  } finally {
+    core.endGroup()
+  }
 }
 
 async function setupBazelisk() {

@@ -1,11 +1,11 @@
 import fs from 'fs'
 import path from 'path'
+import { execSync } from 'child_process'
 import * as cache from '@actions/cache'
 import * as core from '@actions/core'
 import * as glob from '@actions/glob'
 import config from './config.js'
 import { getFolderSize } from './util.js'
-import { saveDiskCacheToR2 } from './r2.js'
 
 async function run() {
   await saveCaches()
@@ -19,16 +19,58 @@ async function saveCaches() {
   }
 
   await saveCache(config.bazeliskCache)
-
-  // disk cache: R2 が設定されていれば R2 に sync (tar なし)、なければ @actions/cache
-  if (config.r2.enabled && config.diskCache.enabled) {
-    await saveDiskCacheToR2(config.diskCache.paths[0])
-  } else {
-    await saveCache(config.diskCache)
-  }
-
+  await saveDiskCache()
   await saveCache(config.repositoryCache)
   await saveExternalCaches(config.externalCache)
+}
+
+/**
+ * disk-cache を tar.zst 1ファイルに圧縮して save。
+ * actions/cache が 1 ファイルだけ扱うので高速。
+ */
+async function saveDiskCache() {
+  const diskCache = config.diskCache
+  if (!diskCache.enabled) return
+
+  const cacheHit = core.getState('disk-tar-cache-hit')
+  if (cacheHit === 'true') {
+    core.info('Disk cache hit, skipping save')
+    return
+  }
+
+  const diskDir = diskCache.paths[0]
+  if (!fs.existsSync(diskDir)) {
+    core.info('No disk cache directory, skipping save')
+    return
+  }
+
+  core.startGroup('Save disk cache (tar.zst)')
+  try {
+    const tarPath = config.diskCacheTarPath
+
+    // tar.zst に圧縮
+    let t0 = Date.now()
+    execSync(`tar --zstd -cf ${tarPath} ${diskDir}`, { stdio: 'inherit' })
+    const compressMs = Date.now() - t0
+    const stat = fs.statSync(tarPath)
+    core.info(`Compressed in ${(compressMs / 1000).toFixed(1)}s (${(stat.size / 1024 / 1024).toFixed(1)} MB)`)
+
+    // actions/cache に save
+    const hash = await glob.hashFiles(
+      diskCache.files.join('\n'),
+      undefined,
+      { followSymbolicLinks: false }
+    )
+    const key = `${config.baseCacheKey}-disk-tar-${hash}`
+    t0 = Date.now()
+    await cache.saveCache([tarPath], key)
+    const uploadMs = Date.now() - t0
+    core.info(`Uploaded in ${(uploadMs / 1000).toFixed(1)}s`)
+  } catch (error) {
+    core.warning(`Failed to save disk cache: ${error.stack}`)
+  } finally {
+    core.endGroup()
+  }
 }
 
 async function saveExternalCaches(cacheConfig) {

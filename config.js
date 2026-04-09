@@ -133,24 +133,12 @@ if (externalCacheConfig) {
   }
 }
 
-const r2Endpoint = core.getInput('r2-endpoint')
-const r2AccessKeyId = core.getInput('r2-access-key-id')
-const r2SecretAccessKey = core.getInput('r2-secret-access-key')
-const r2Bucket = core.getInput('r2-bucket')
-const r2Enabled = r2Endpoint.length > 0 && r2Bucket.length > 0
-
 const token = core.getInput('token')
 core.exportVariable('BAZELISK_GITHUB_TOKEN', token)
 
 export default {
-  r2: {
-    enabled: r2Enabled,
-    endpoint: r2Endpoint,
-    accessKeyId: r2AccessKeyId,
-    secretAccessKey: r2SecretAccessKey,
-    bucket: r2Bucket,
-  },
   baseCacheKey,
+  diskCacheTarPath: `${os.tmpdir()}/bazel-disk-cache.tar.zst`,
   cacheSave,
   bazeliskCache: {
     enabled: core.getBooleanInput('bazelisk-cache'),
