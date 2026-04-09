@@ -33,6 +33,22 @@ inputs:
     description: Google Cloud account key for remote cache
     required: false
     default: ""
+  r2-endpoint:
+    description: Cloudflare R2 S3-compatible endpoint URL (e.g. https://<account-id>.r2.cloudflarestorage.com)
+    required: false
+    default: ""
+  r2-access-key-id:
+    description: R2 access key ID for disk cache storage
+    required: false
+    default: ""
+  r2-secret-access-key:
+    description: R2 secret access key for disk cache storage
+    required: false
+    default: ""
+  r2-bucket:
+    description: R2 bucket name for disk cache storage
+    required: false
+    default: ""
   module-root:
     description: Bazel module root directory. Default is `.`
     required: false

@@ -5,6 +5,7 @@ import * as core from '@actions/core'
 import * as glob from '@actions/glob'
 import config from './config.js'
 import { getFolderSize } from './util.js'
+import { saveDiskCacheToR2 } from './r2.js'
 
 async function run() {
   await saveCaches()
@@ -18,7 +19,14 @@ async function saveCaches() {
   }
 
   await saveCache(config.bazeliskCache)
-  await saveCache(config.diskCache)
+
+  // disk cache: R2 が設定されていれば R2 に sync (tar なし)、なければ @actions/cache
+  if (config.r2.enabled && config.diskCache.enabled) {
+    await saveDiskCacheToR2(config.diskCache.paths[0])
+  } else {
+    await saveCache(config.diskCache)
+  }
+
   await saveCache(config.repositoryCache)
   await saveExternalCaches(config.externalCache)
 }

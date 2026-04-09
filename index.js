@@ -6,6 +6,7 @@ import * as github from '@actions/github'
 import * as glob from '@actions/glob'
 import * as tc from '@actions/tool-cache'
 import config from './config.js'
+import { restoreDiskCacheFromR2 } from './r2.js'
 
 async function run() {
   try {
@@ -25,7 +26,14 @@ async function setupBazel() {
 
   await setupBazelisk()
   await restoreCache(config.bazeliskCache)
-  await restoreCache(config.diskCache)
+
+  // disk cache: R2 が設定されていれば R2 から sync (tar なし)、なければ @actions/cache
+  if (config.r2.enabled && config.diskCache.enabled) {
+    await restoreDiskCacheFromR2(config.diskCache.paths[0])
+  } else {
+    await restoreCache(config.diskCache)
+  }
+
   await restoreCache(config.repositoryCache)
   await restoreExternalCaches(config.externalCache)
 }
