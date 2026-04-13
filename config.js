@@ -153,7 +153,8 @@ export default {
     files: [
       ...repositoryCacheFiles,
       `${moduleRoot}/**/BUILD.bazel`,
-      `${moduleRoot}/**/BUILD`
+      `${moduleRoot}/**/BUILD`,
+      `${moduleRoot}/.bazelrc`
     ],
     name: diskCacheName,
     paths: [bazelDisk]
