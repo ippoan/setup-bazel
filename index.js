@@ -44,7 +44,7 @@ async function restoreDiskCache() {
   try {
     const tarPath = config.diskCacheTarPath
     const hash = await glob.hashFiles(diskCache.files.join('\n'))
-    const restoreKey = `${config.baseCacheKey}-disk-tar-`
+    const restoreKey = `${config.baseCacheKey}-${diskCache.name}-tar-`
     const key = `${restoreKey}${hash}`
 
     let t0 = Date.now()

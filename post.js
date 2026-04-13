@@ -61,7 +61,7 @@ async function saveDiskCache() {
       undefined,
       { followSymbolicLinks: false }
     )
-    const key = `${config.baseCacheKey}-disk-tar-${hash}`
+    const key = `${config.baseCacheKey}-${diskCache.name}-tar-${hash}`
     t0 = Date.now()
     await cache.saveCache([tarPath], key)
     const uploadMs = Date.now() - t0
